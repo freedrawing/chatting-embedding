@@ -1,13 +1,13 @@
 """
-Flask service for:
-- Storing chat messages with embeddings (for later retrieval)
-- Managing intent seed phrases with embeddings
-- Checking if an input should be blocked using vector similarity against seeds
+Flask 서비스 목적:
+- 임베딩과 함께 채팅 메시지를 저장하여 이후 검색/조회에 활용
+- 의도(라벨)별 시드 문구를 임베딩과 함께 관리
+- 입력 문장이 시드와의 벡터 유사도를 기반으로 차단 대상인지 판별
 
-Key notes:
-- Uses E5 model with query/passage prefixes. See embedder.get_embedding
-- Elasticsearch dense_vector with cosine similarity
-- In knn_search, Elasticsearch returns _score as cosine similarity (higher is more similar)
+핵심 노트:
+- 대칭(symmetric) 임베딩 모델을 사용하며, 쿼리/문서를 동일 방식으로 임베딩
+- Elasticsearch의 dense_vector를 코사인 유사도와 함께 사용
+- knn_search에서 Elasticsearch의 _score는 코사인 유사도(값이 클수록 더 유사함)
 """
 
 from flask import Flask, request, jsonify
@@ -26,16 +26,16 @@ import hashlib
 
 app = Flask(__name__)
 
-# Ensure indices exist on startup
+# 시작 시 인덱스가 존재하도록 보장
 create_index(TELEGRAM_CHATS_INDEX_NAME, mapping)
 create_index(SEED_INDEX_NAME, seed_mapping)
 
 @app.route("/embed", methods=["POST"])
 def embed():
-    """Embed and index a chat message as a passage embedding.
+    """채팅 메시지를 passage 임베딩으로 생성하여 색인합니다.
 
-    Expects JSON body with: text, chat_id, message_id, and optional metadata.
-    Stores under TELEGRAM_CHATS_INDEX_NAME using id "{chat_id}_{message_id}".
+    요구 JSON 필드: text, chat_id, message_id (+ 선택적 메타데이터)
+    저장 위치: TELEGRAM_CHATS_INDEX_NAME, 문서 ID 형식은 "{chat_id}_{message_id}"
     """
     print("embed")
     data = request.json
@@ -48,10 +48,9 @@ def embed():
     if chat_id is None or message_id is None:
         return jsonify({"error": "chat_id and message_id are required"}), 400
 
-    # Store message embeddings as passages for future retrieval
-    # Passage embedding for stored content (per E5 convention)
-    vector = get_embedding(text, kind="passage")
-    # Sanity log: should be 768 dimensions for multilingual-e5-base
+    # 향후 검색을 위해 메시지를 임베딩으로 저장 (대칭 모델)
+    vector = get_embedding(text)
+    # 확인 로그: 임베딩 차원 수 출력
     print(f"embedding length: {len(vector)}")
 
     es_id = f"{chat_id}_{message_id}"
@@ -75,13 +74,13 @@ def embed():
 
 @app.route("/seeds", methods=["POST"])
 def add_seeds():
-    """Add one or more seed phrases for a given label.
+    """특정 라벨에 대해 하나 이상의 시드 문구를 추가합니다.
 
-    Body:
-      - label: string (required)
-      - phrases: string | [string] (required)
+    요청 본문:
+      - label: 문자열 (필수)
+      - phrases: 문자열 또는 문자열 배열 (필수)
 
-    Each phrase is stored with a passage embedding for knn matching.
+    각 문구는 kNN 매칭을 위해 임베딩과 함께 저장됩니다.
     """
     data = request.json or {}
     label = data.get("label")
@@ -92,19 +91,17 @@ def add_seeds():
 
     if phrases is None:
         return jsonify({"error": "phrases is required (string or array)"}), 400
-    # Accept both single string and array input for 'phrases'
+    # 'phrases'는 단일 문자열과 문자열 배열을 모두 허용
     if isinstance(phrases, str):
         phrases = [phrases]
-    elif isinstance(phrases, list):
-        pass
-    else:
+    elif not isinstance(phrases, list):
         return jsonify({"error": "phrases must be a string or an array of strings"}), 400
 
     def normalize_phrase(s: str) -> str:
-        """Lightweight normalization for keyword/phrase canonicalization.
+        """키워드/문구의 경량 표준화를 수행합니다.
 
-        - Trim, collapse whitespace, strip trailing punctuation, casefold
-        Note: E5 embeddings use full text; this normalization is for metadata only.
+        - 앞뒤 공백 제거, 연속 공백 축소, 문장 끝의 구두점 제거, 소문자 계열 정규화(casefold)
+        참고: E5 임베딩은 원문 텍스트를 사용하며, 이 정규화는 메타데이터 용도입니다.
         """
         s = (s or "").strip()
         s = re.sub(r"\s+", " ", s)
@@ -118,8 +115,8 @@ def add_seeds():
             continue
         normalized = normalize_phrase(p)
         es_id = hashlib.sha1(f"{label}|{normalized}".encode("utf-8")).hexdigest()
-        # Index seed phrases as passages per E5 convention
-        vec = get_embedding(p, kind="passage")
+        # 대칭 모델: 시드 문구를 동일 방식으로 임베딩하여 색인
+        vec = get_embedding(p)
         doc = {
             "label": label,
             "phrase": p,
@@ -142,33 +139,33 @@ def add_seeds():
     }), 201
 
 
-@app.route("/filter/should_block", methods=["POST"])
+@app.route("/seed-matches", methods=["POST"])
 def should_block():
-    """Return whether an input text should be blocked.
+    """입력 텍스트를 차단해야 하는지 여부를 반환합니다.
 
-    Logic:
-      - Embed input as a query (E5)
-      - knn search top-1 against seed embeddings
-      - Interpret Elasticsearch _score as cosine similarity
-      - Compare similarity >= threshold -> block
+    로직:
+      - 입력과 시드를 동일 방식으로 임베딩
+      - 시드 임베딩에 대해 kNN 상위 1개 검색
+      - Elasticsearch의 _score를 코사인 유사도로 해석
+      - 유사도 >= 임계값이면 차단으로 판단
 
-    Request JSON:
-      - text: string (required)
-      - threshold: float in [0,1], default 0.8
-      - label: string (optional) OR labels: [string] to filter seed set
+    요청 JSON:
+      - text: 문자열 (필수)
+      - threshold: [0,1] 범위의 실수, 기본값 0.8
+      - label: 문자열(선택) 또는 labels: 문자열 배열(선택) — 시드 범위를 필터링
     """
     data = request.json or {}
     text = data.get("text")
     if not text or not isinstance(text, str) or not text.strip():
         return jsonify({"error": "text is required"}), 400
 
-    # threshold default
+    # 임계값 기본값 처리
     try:
-        threshold = float(data.get("threshold", 0.8))
+        threshold = float(data.get("threshold", 0.9))
     except (TypeError, ValueError):
-        threshold = 0.8
+        threshold = 0.9
 
-    # Optional label filter(s)
+    # 선택적 라벨 필터 구성
     filters = None
     if isinstance(data.get("label"), str) and data.get("label").strip():
         filters = [{"term": {"label": data.get("label")}}]
@@ -177,51 +174,80 @@ def should_block():
         if labels:
             filters = [{"terms": {"label": labels}}]
 
-    # Embed user input as a query per E5 convention
-    vector = get_embedding(text, kind="query")
+    # 대칭 모델: 사용자 입력을 동일 방식으로 임베딩
+    vector = get_embedding(text)
 
-    try:
-        res = es.knn_search(
-            index=SEED_INDEX_NAME,
-            knn={
-                "field": "embedding",
-                "query_vector": vector,
-                "k": 1,
-                "num_candidates": 100
-            },
-            _source=["label", "phrase"], # 필요한 필드만 반환
-            filter=filters
-        )
-        hits = res.get("hits", {}).get("hits", [])
-    except Exception:
-        hits = []
+    def _search_top_hit() -> dict | None:
+        try:
+            res = es.knn_search(
+                index=SEED_INDEX_NAME,
+                knn={
+                    "field": "embedding",
+                    "query_vector": vector,
+                    "k": 1,
+                    "num_candidates": 100,
+                },
+                _source=["label", "phrase"],
+                filter=filters,
+            )
+            hits_local = res.get("hits", {}).get("hits", [])
+            return hits_local[0] if hits_local else None
+        except Exception:
+            return None
 
-    if not hits:
-        return jsonify({
+    def _format_no_hit() -> tuple[dict, int]:
+        return ({
             "block": False,
             "label": None,
             "similarity": None,
             "distance": None,
             "threshold": threshold,
-            "reason": "no_seed_match"
+            "reason": "no_seed_match",
+        }, 200)
+
+    def _format_with_hit(top: dict) -> tuple[dict, int]:
+        top_label_local = top.get("_source", {}).get("label")
+        raw_score_local = top.get("_score")
+        sim_score_local = None if raw_score_local is None else float(raw_score_local)
+        dist_local = None if sim_score_local is None else (1.0 - sim_score_local)
+        block_local = (sim_score_local is not None) and (sim_score_local >= threshold)
+        return ({
+            "block": bool(block_local),
+            "label": top_label_local,
+            "similarity": sim_score_local,
+            "distance": dist_local,
+            "threshold": threshold,
+        }, 200)
+
+    top_hit = _search_top_hit()
+    body, status = _format_no_hit() if top_hit is None else _format_with_hit(top_hit)
+    return jsonify(body), status
+
+
+@app.route("/labels", methods=["GET"])
+def list_labels():
+    """현재 등록된 시드 라벨 목록을 반환합니다."""
+    try:
+        res = es.search(
+            index=SEED_INDEX_NAME,
+            size=0,
+            aggs={
+                "labels": {
+                    "terms": {
+                        "field": "label",
+                        "size": 1000
+                    }
+                }
+            }
+        )
+        buckets = res.get("aggregations", {}).get("labels", {}).get("buckets", [])
+        labels = [b.get("key") for b in buckets]
+        return jsonify({
+            "count": len(labels),
+            "labels": labels
         })
-
-    top = hits[0]
-    top_label = top.get("_source", {}).get("label")
-    raw_score = top.get("_score")
-    # Important: For Elasticsearch knn with dense_vector(similarity=cosine),
-    # _score is cosine similarity (higher is more similar).
-    sim_score = None if raw_score is None else float(raw_score)
-    dist = None if sim_score is None else (1.0 - sim_score)
-    block = (sim_score is not None) and (sim_score >= threshold)
-
-    return jsonify({
-        "block": bool(block),
-        "label": top_label,
-        "similarity": sim_score,
-        "distance": dist,
-        "threshold": threshold
-    })
+    except Exception as e:
+        return jsonify({"error": "failed_to_list_labels", "detail": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(host="0.0.0.0", debug=True, port=5001)

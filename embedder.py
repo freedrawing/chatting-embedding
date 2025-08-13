@@ -1,16 +1,13 @@
 from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer("intfloat/multilingual-e5-base")
+# 대칭(symmetric) 임베딩 모델: 쿼리/문서를 동일 방식으로 임베딩
+# 한국어에 최적화된 멀티태스킹 SBERT 모델
+model = SentenceTransformer("jhgan/ko-sbert-multitask")
 
-def get_embedding(text: str, kind: str = "query"):
-    """
-    Return an embedding for the given text using E5.
+def get_embedding(text: str):
+    """주어진 텍스트의 임베딩을 반환합니다.
 
-    E5 expects different prefixes for queries vs. passages. Use:
-    - kind="query" for user inputs
-    - kind="passage" for stored phrases/seeds/documents
+    - 대칭 임베딩 모델을 사용하므로 입력 종류와 무관하게 동일 방식으로 인코딩합니다.
+    - 코사인 유사도 일관성을 위해 단위 벡터 정규화를 수행합니다.
     """
-    prefix = "query" if kind != "passage" else "passage"
-    formatted_input = f"{prefix}: {text}"
-    # Normalize to unit length to make cosine metrics consistent
-    return model.encode(formatted_input, normalize_embeddings=True).tolist()
+    return model.encode(text, normalize_embeddings=True).tolist()
