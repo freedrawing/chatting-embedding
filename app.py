@@ -32,9 +32,9 @@ create_index(SEED_INDEX_NAME, seed_mapping)
 
 @app.route("/embed", methods=["POST"])
 def embed():
-    """채팅 메시지를 passage 임베딩으로 생성하여 색인합니다.
+    """채팅 메시지를 임베딩으로 생성하여 색인합니다.
 
-    요구 JSON 필드: text, chat_id, message_id (+ 선택적 메타데이터)
+    요구 JSON 필드: text, chat_id, message_id, nickname, username, is_bot, timestamp
     저장 위치: TELEGRAM_CHATS_INDEX_NAME, 문서 ID 형식은 "{chat_id}_{message_id}"
     """
     print("embed")
@@ -55,16 +55,32 @@ def embed():
 
     es_id = f"{chat_id}_{message_id}"
 
+    # timestamp 전처리: Unix timestamp를 ISO 형식으로 변환
+    timestamp = data.get("timestamp")
+    if timestamp:
+        if isinstance(timestamp, (int, float)):
+            # Unix timestamp를 ISO 형식으로 변환
+            timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+        elif isinstance(timestamp, str):
+            # 이미 문자열이면 그대로 사용 (ISO 형식인지 확인)
+            try:
+                datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            except ValueError:
+                # 잘못된 형식이면 현재 시간으로 대체
+                timestamp = datetime.now(timezone.utc).isoformat()
+    else:
+        # timestamp가 없으면 현재 시간 사용
+        timestamp = datetime.now(timezone.utc).isoformat()
+
     doc = {
         "id": es_id,  # chat_id_message_id 형식으로 저장
         "chat_id": chat_id,
         "message_id": message_id,
-        "chat_title": data.get("chat_title"),
-        "user_id": data.get("user_id"),
+        "nickname": data.get("nickname"),
         "username": data.get("username"),
         "is_bot": data.get("is_bot"),
         "text": text,
-        "timestamp": data.get("timestamp"),
+        "timestamp": timestamp,
         "embedding": vector
     }
 
