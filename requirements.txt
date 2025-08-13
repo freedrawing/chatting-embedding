@@ -1,4 +1,7 @@
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.8.0
 flask
 elasticsearch==8.13.0
-sentence-transformers
+sentence-transformers==5.1.0
 python-dotenv

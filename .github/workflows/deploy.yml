@@ -31,10 +31,10 @@ jobs:
       - name: Save Docker image as tar
         run: docker save chatting-embedding:latest -o chatting_embedding.tar
 
-      - name: Make deploy bundle (single archive)
+      - name: Make deploy bundle (no compression)
         run: |
           chmod 644 chatting_embedding.tar
-          tar czf deploy_bundle.tgz chatting_embedding.tar docker-compose.yml .env
+          tar cf deploy_bundle.tar chatting_embedding.tar docker-compose.yml .env
 
       - name: Copy bundle to server (password auth)
         uses: appleboy/scp-action@v0.1.7
@@ -43,7 +43,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "deploy_bundle.tgz"
+          source: "deploy_bundle.tar"
           target: "~/chatting-embedding-deploy/"
 
       - name: Deploy on server (load & compose up)
@@ -56,8 +56,8 @@ jobs:
           script: |
             set -e
             cd ~/chatting-embedding-deploy
-            tar xzf deploy_bundle.tgz
-            rm -f deploy_bundle.tgz
+            tar xf deploy_bundle.tar
+            rm -f deploy_bundle.tar
             docker load -i chatting_embedding.tar
             rm -f chatting_embedding.tar
             # 기존 컨테이너 중지/삭제 후 재기동
