@@ -1,7 +1,18 @@
 --index-url https://download.pytorch.org/whl/cpu
 --extra-index-url https://pypi.org/simple
+
+# Core ML/AI packages (version critical)
 torch==2.8.0
-flask
-elasticsearch==8.13.0
 sentence-transformers==5.1.0
-python-dotenv
+numpy>=2.2.0,<2.4.0
+scipy>=1.15.0,<1.17.0
+
+# Application packages
+Flask==3.1.1
+elasticsearch==8.13.0
+python-dotenv==1.1.1
+
+# ML dependencies (can float within minor versions)
+transformers>=4.55.0,<4.56.0
+huggingface-hub>=0.34.0,<0.35.0
+scikit-learn>=1.7.0,<1.8.0
