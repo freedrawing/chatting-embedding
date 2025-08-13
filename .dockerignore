@@ -7,7 +7,6 @@ __pycache__/
 *.sqlite3
 *.db
 .DS_Store
-.env
 .git
 .gitignore
 *.ipynb_checkpoints/
