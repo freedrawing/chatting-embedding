@@ -11,6 +11,9 @@ RUN apt-get update \
     && echo "Asia/Seoul" > /etc/timezone \
     && dpkg-reconfigure -f noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# 환경변수로 타임존 설정
+ENV TZ=Asia/Seoul
 # - tzdata 패키지 설치 (타임존 데이터)
 # - 한국 시간대(Asia/Seoul) 설정
 # - 불필요한 패키지 캐시 정리

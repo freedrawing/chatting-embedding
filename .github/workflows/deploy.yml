@@ -61,6 +61,7 @@ jobs:
               --network n8n-network \
               -p 5001:5001 \
               --restart unless-stopped \
+              -e TZ=Asia/Seoul \
               chatting-embedding:latest
             rm -rf ~/chatting-embedding
 

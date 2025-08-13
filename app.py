@@ -18,6 +18,8 @@ from elastic_client import (
     create_index,
     mapping,
     seed_mapping,
+    add_default_seeds,
+    normalize_phrase,
 )
 from embedder import get_embedding
 from datetime import datetime, timezone
@@ -26,7 +28,7 @@ import hashlib
 
 app = Flask(__name__)
 
-# 시작 시 인덱스가 존재하도록 보장
+# 시작 시 인덱스가 존재하도록 보장 (시드 인덱스 생성 시 자동으로 기본 시드 추가됨)
 create_index(TELEGRAM_CHATS_INDEX_NAME, mapping)
 create_index(SEED_INDEX_NAME, seed_mapping)
 
@@ -113,17 +115,7 @@ def add_seeds():
     elif not isinstance(phrases, list):
         return jsonify({"error": "phrases must be a string or an array of strings"}), 400
 
-    def normalize_phrase(s: str) -> str:
-        """키워드/문구의 경량 표준화를 수행합니다.
 
-        - 앞뒤 공백 제거, 연속 공백 축소, 문장 끝의 구두점 제거, 소문자 계열 정규화(casefold)
-        참고: E5 임베딩은 원문 텍스트를 사용하며, 이 정규화는 메타데이터 용도입니다.
-        """
-        s = (s or "").strip()
-        s = re.sub(r"\s+", " ", s)
-        s = re.sub(r"[?!.。！？…]+$", "", s)
-        s = s.casefold()
-        return s
 
     results = []
     for p in phrases:
