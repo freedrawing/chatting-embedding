@@ -1,13 +1,21 @@
+import os
+import torch
 from sentence_transformers import SentenceTransformer
 
-# 대칭(symmetric) 임베딩 모델: 쿼리/문서를 동일 방식으로 임베딩
-# 한국어에 최적화된 멀티태스킹 SBERT 모델
-model = SentenceTransformer("jhgan/ko-sbert-multitask")
+# CUDA/MPS 비활성화
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
+
+torch.use_deterministic_algorithms(True)
+torch.set_float32_matmul_precision("high")
+torch.set_num_threads(1)
+
+model = SentenceTransformer("jhgan/ko-sbert-multitask", device="cpu").eval()
 
 def get_embedding(text: str):
-    """주어진 텍스트의 임베딩을 반환합니다.
+    """텍스트 임베딩 반환.
 
-    - 대칭 임베딩 모델을 사용하므로 입력 종류와 무관하게 동일 방식으로 인코딩합니다.
-    - 코사인 유사도 일관성을 위해 단위 벡터 정규화를 수행합니다.
+    - 대칭 임베딩 모델. 입력 종류와 무관하게 동일 방식으로 인코딩
+    - 코사인 유사도 일관성을 위해 단위 벡터로 정규화
     """
     return model.encode(text, normalize_embeddings=True).tolist()

@@ -33,7 +33,7 @@ create_index(SEED_INDEX_NAME, seed_mapping)
 
 @app.route("/embed", methods=["POST"])
 def embed():
-    """채팅 메시지를 임베딩으로 생성하여 색인합니다.
+    """채팅 메시지를 임베딩으로 생성해 색인.
 
     요구 JSON 필드: text, chat_id, message_id, nickname, username, is_bot, timestamp
     저장 위치: TELEGRAM_CHATS_INDEX_NAME, 문서 ID 형식은 "{chat_id}_{message_id}"
@@ -91,13 +91,13 @@ def embed():
 
 @app.route("/seeds", methods=["POST"])
 def add_seeds():
-    """특정 라벨에 대해 하나 이상의 시드 문구를 추가합니다.
+    """라벨에 시드 문구 추가.
 
     요청 본문:
       - label: 문자열 (필수)
       - phrases: 문자열 또는 문자열 배열 (필수)
 
-    각 문구는 kNN 매칭을 위해 임베딩과 함께 저장됩니다.
+    각 문구는 kNN 매칭을 위해 임베딩과 함께 저장
     """
     data = request.json or {}
     label = data.get("label")
@@ -148,7 +148,7 @@ def add_seeds():
 
 @app.route("/seed-matches", methods=["POST"])
 def should_block():
-    """입력 텍스트를 차단해야 하는지 여부를 반환합니다.
+    """입력 텍스트 차단 여부 판단.
 
     로직:
       - 입력과 시드를 동일 방식으로 임베딩
@@ -168,9 +168,9 @@ def should_block():
 
     # 임계값 기본값 처리
     try:
-        threshold = float(data.get("threshold", 0.9))
+        threshold = float(data.get("threshold", 0.85))
     except (TypeError, ValueError):
-        threshold = 0.9
+        threshold = 0.85
 
     # 선택적 라벨 필터 구성
     filters = None
@@ -233,7 +233,7 @@ def should_block():
 
 @app.route("/labels", methods=["GET"])
 def list_labels():
-    """현재 등록된 시드 라벨 목록을 반환합니다."""
+    """등록된 시드 라벨 목록 반환."""
     try:
         res = es.search(
             index=SEED_INDEX_NAME,
