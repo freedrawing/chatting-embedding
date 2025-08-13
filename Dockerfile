@@ -1,5 +1,5 @@
-# 베이스 이미지: Python 3.10 슬림 버전
-FROM python:3.10-slim
+# 베이스 이미지: Python 3.13 슬림 버전
+FROM python:3.13-slim
 
 # 작업 디렉토리를 /app으로 설정
 WORKDIR /app
@@ -18,10 +18,12 @@ ENV TZ=Asia/Seoul
 # - 한국 시간대(Asia/Seoul) 설정
 # - 불필요한 패키지 캐시 정리
 
-# requirements.txt를 먼저 복사하고 의존성 설치
+# requirements.txt를 먼저 복사하고 pip 최신화 후 의존성 설치
 COPY requirements.txt ./
+# pip을 최신 버전으로 업그레이드 (로그로 버전 출력)
+RUN python -m pip install --upgrade pip && pip --version
 RUN pip install --no-cache-dir -r requirements.txt
-# - 의존성을 먼저 설치해 Docker 레이어 캐싱 최적화
+# - pip 업그레이드 후 의존성을 설치해 Docker 레이어 캐싱 최적화
 
 # 모든 소스 코드를 컨테이너로 복사
 COPY . .
