@@ -1,6 +1,11 @@
 import os
+import re
+import hashlib
+import json
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
+from embedder import get_embedding
 
 # .env 파일 로드
 load_dotenv()
@@ -57,7 +62,7 @@ def create_index(index_name: str, body: dict):
         es.indices.create(index=index_name, body=body)
         print(f"✅ Created index: {index_name}")
         
-        # 시드 인덱스가 새로 생성된 경우 기본 시드 데이터 추가
+        # 인덱스가 새로 생성된 경우 기본 시드 데이터 추가
         if index_name == SEED_INDEX_NAME:
             add_default_seeds()
     else:
@@ -77,13 +82,6 @@ def normalize_phrase(s: str) -> str:
 
 def add_default_seeds():
     """기본 시드 데이터를 추가합니다."""
-    from embedder import get_embedding
-    from datetime import datetime, timezone
-    import re
-    import hashlib
-    import json
-    import os
-    
     # JSON 파일에서 기본 시드 데이터 로드
     json_path = os.path.join(os.path.dirname(__file__), "default_seeds.json")
     try:
@@ -131,4 +129,4 @@ def add_default_seeds():
     if total_added > 0:
         print(f"✅ Added {total_added} default seeds to {SEED_INDEX_NAME}")
     else:
-        print(f"ℹ️ No new seeds added (all already exist)")
+        print("ℹ️ No new seeds added (all already exist)")

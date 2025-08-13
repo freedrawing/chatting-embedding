@@ -23,7 +23,6 @@ from elastic_client import (
 )
 from embedder import get_embedding
 from datetime import datetime, timezone
-import re
 import hashlib
 
 app = Flask(__name__)
